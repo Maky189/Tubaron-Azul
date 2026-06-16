@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+saves/save.json
+saves/records.json
+saves/_*.json
