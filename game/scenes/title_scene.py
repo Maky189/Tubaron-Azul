@@ -14,14 +14,32 @@ from game.data.teams import GetCapeVerde, GetRival, WORLD_CUP_PATH
 class TitleScene(GameScene):
     """Entry screen: start a World Cup run, continue, play a friendly, records."""
 
+    _PLAYER_IDLE_FRAMES = 7
+    _PLAYER_IDLE_FRAME_DURATION = 0.20
+    _PLAYER_SIZE = (210, 290)
+    _PLAYER_POS = (688, 196)
+
     def __init__(self, ctx: GameContext) -> None:
         super().__init__(ctx)
         self._elapsed = 0.0
         self._crest = self.app.GetAssets().LoadImage("capeverde/crest.png")
         self._flag = self.app.GetAssets().LoadImage("capeverde/flag.png")
-        self._player = self.app.GetAssets().LoadImage("players/outfield_idle.png")
-        self._player = pygame.transform.smoothscale(self._player, (210, 290))
+        self._player_frames = self._LoadPlayerIdleFrames()
         self._menu = self._BuildMenu()
+
+    def _LoadPlayerIdleFrames(self) -> list[pygame.Surface]:
+        assets = self.app.GetAssets()
+        frames: list[pygame.Surface] = []
+
+        for index in range(1, self._PLAYER_IDLE_FRAMES + 1):
+            frame = assets.LoadImage(f"menu_player_idle/{index}.png")
+            frames.append(pygame.transform.smoothscale(frame, self._PLAYER_SIZE))
+
+        return frames
+
+    def _CurrentPlayerFrame(self) -> pygame.Surface:
+        index = int(self._elapsed / self._PLAYER_IDLE_FRAME_DURATION) % len(self._player_frames)
+        return self._player_frames[index]
 
     def _BuildMenu(self) -> Menu:
         has_save = self.ctx.save_manager.HasSave()
@@ -95,7 +113,7 @@ class TitleScene(GameScene):
 
     def Render(self, surface: pygame.Surface) -> None:
         DrawMenuBackground(surface, self._elapsed)
-        surface.blit(self._player, (688, 196))
+        surface.blit(self._CurrentPlayerFrame(), self._PLAYER_POS)
         surface.blit(self._crest, (724, 96))
         surface.blit(pygame.transform.scale(self._flag, (120, 72)), (60, 470))
 
