@@ -17,6 +17,7 @@ Color = tuple[int, int, int]
 PLAYER_HEIGHT = 70
 KEEPER_HEIGHT = 56
 DIVE_HEIGHT = 60
+RUN_FRAME_COUNT = 8
 
 # Pale skin target for non-Cape-Verde squads, relit per pixel to keep shading.
 LIGHT_SKIN = (236, 198, 172)
@@ -24,7 +25,8 @@ LIGHT_SKIN = (236, 198, 172)
 
 class TeamSprites:
     def __init__(self, idle: pygame.Surface, kick: pygame.Surface,
-                 keeper_idle: pygame.Surface, keeper_dive: pygame.Surface) -> None:
+                 keeper_idle: pygame.Surface, keeper_dive: pygame.Surface,
+                 run_frames: list[pygame.Surface]) -> None:
         self.idle_right = idle
         self.idle_left = pygame.transform.flip(idle, True, False)
         self.kick_right = kick
@@ -33,6 +35,8 @@ class TeamSprites:
         self.keeper_idle_left = pygame.transform.flip(keeper_idle, True, False)
         self.keeper_dive_right = keeper_dive
         self.keeper_dive_left = pygame.transform.flip(keeper_dive, True, False)
+        self.run_right = run_frames
+        self.run_left = [pygame.transform.flip(frame, True, False) for frame in run_frames]
 
 
 def _IsShirtBlue(r: int, g: int, b: int) -> bool:
@@ -126,6 +130,10 @@ class SpriteFactory:
         self._kick = _ScaleToHeight(base_kick, PLAYER_HEIGHT)
         self._keeper_dive = _ScaleToHeight(base_keeper, DIVE_HEIGHT)
         self._keeper_stand_src = _ScaleToHeight(base_idle, KEEPER_HEIGHT)
+        self._run_frames = [
+            _ScaleToHeight(assets.LoadImage(f"player_run_frames/{index}.png"), PLAYER_HEIGHT)
+            for index in range(1, RUN_FRAME_COUNT + 1)
+        ]
         self._cache: dict[str, TeamSprites] = {}
 
     def GetTeamSprites(self, team_id: str, shirt: Color, keeper: Color) -> TeamSprites:
@@ -136,13 +144,15 @@ class SpriteFactory:
         kick = _RecolorMask(self._kick, _IsShirtBlue, shirt)
         keeper_idle = _RecolorMask(self._keeper_stand_src, _IsShirtBlue, keeper)
         keeper_dive = _RecolorMask(self._keeper_dive, _IsKeeperYellow, keeper)
+        run_frames = [_RecolorMask(frame, _IsShirtBlue, shirt) for frame in self._run_frames]
 
         if team_id != "capeverde":
             idle = _RecolorSkin(idle)
             kick = _RecolorSkin(kick)
             keeper_idle = _RecolorSkin(keeper_idle)
             keeper_dive = _RecolorSkin(keeper_dive)
+            run_frames = [_RecolorSkin(frame) for frame in run_frames]
 
-        sprites = TeamSprites(idle, kick, keeper_idle, keeper_dive)
+        sprites = TeamSprites(idle, kick, keeper_idle, keeper_dive, run_frames)
         self._cache[team_id] = sprites
         return sprites

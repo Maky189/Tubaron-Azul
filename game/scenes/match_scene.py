@@ -166,6 +166,11 @@ class MatchScene(GameScene):
                 return sprites.kick_right
             return sprites.kick_left
 
+        if player.IsMoving():
+            frames = sprites.run_right if facing_right else sprites.run_left
+            index = int(player.run_phase) % len(frames)
+            return frames[index]
+
         if facing_right:
             return sprites.idle_right
         return sprites.idle_left

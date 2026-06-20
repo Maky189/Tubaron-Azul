@@ -14,7 +14,7 @@ from game.data.teams import GetCapeVerde, GetRival, WORLD_CUP_PATH
 class TitleScene(GameScene):
     """Entry screen: start a World Cup run, continue, play a friendly, records."""
 
-    _PLAYER_IDLE_FRAMES = 7
+    _PLAYER_IDLE_FRAMES = 4
     _PLAYER_IDLE_FRAME_DURATION = 0.20
     _PLAYER_SIZE = (210, 290)
     _PLAYER_POS = (688, 196)
