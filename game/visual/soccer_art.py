@@ -16,6 +16,7 @@ Color = tuple[int, int, int]
 
 PLAYER_HEIGHT = 70
 KEEPER_HEIGHT = 56
+KEEPER_RUN_HEIGHT = 82
 DIVE_HEIGHT = 60
 RUN_FRAME_COUNT = 8
 
@@ -50,6 +51,20 @@ def _IsShirtBlue(r: int, g: int, b: int) -> bool:
 
 def _IsKeeperYellow(r: int, g: int, b: int) -> bool:
     return r > 140 and g > 110 and b < 130 and (r + g) > 2.2 * b
+
+
+def _IsOutfieldShorts(r: int, g: int, b: int) -> bool:
+    return r > 175 and g > 175 and b > 175 and b < 250
+
+
+def _Darken(color: Color, amount: int = 28) -> Color:
+    return tuple(max(0, channel - amount) for channel in color)
+
+
+def _RecolorToKeeperKit(surface: pygame.Surface, keeper: Color) -> pygame.Surface:
+    """Recolour outfield-base keeper sprites to the team's keeper kit."""
+    out = _RecolorMask(surface, _IsShirtBlue, keeper)
+    return _RecolorMask(out, _IsOutfieldShorts, _Darken(keeper))
 
 
 def _IsSkin(r: int, g: int, b: int) -> bool:
@@ -138,7 +153,7 @@ class SpriteFactory:
         self._keeper_beaten = _ScaleToHeight(base_keeper_beaten, DIVE_HEIGHT)
         self._keeper_stand_src = _ScaleToHeight(base_idle, KEEPER_HEIGHT)
         self._keeper_run_src = [
-            _ScaleToHeight(assets.LoadImage(f"player_run_frames/{index}.png"), KEEPER_HEIGHT)
+            _ScaleToHeight(assets.LoadImage(f"player_run_frames/{index}.png"), KEEPER_RUN_HEIGHT)
             for index in range(1, RUN_FRAME_COUNT + 1)
         ]
         self._run_frames = [
@@ -153,11 +168,11 @@ class SpriteFactory:
 
         idle = _RecolorMask(self._idle, _IsShirtBlue, shirt)
         kick = _RecolorMask(self._kick, _IsShirtBlue, shirt)
-        keeper_idle = _RecolorMask(self._keeper_stand_src, _IsShirtBlue, keeper)
+        keeper_idle = _RecolorToKeeperKit(self._keeper_stand_src, keeper)
         keeper_dive = _RecolorMask(self._keeper_dive, _IsKeeperYellow, keeper)
         keeper_beaten = _RecolorMask(self._keeper_beaten, _IsKeeperYellow, keeper)
         run_frames = [_RecolorMask(frame, _IsShirtBlue, shirt) for frame in self._run_frames]
-        keeper_run_frames = [_RecolorMask(frame, _IsShirtBlue, keeper) for frame in self._keeper_run_src]
+        keeper_run_frames = [_RecolorToKeeperKit(frame, keeper) for frame in self._keeper_run_src]
 
         if team_id != "capeverde":
             idle = _RecolorSkin(idle)
