@@ -10,6 +10,7 @@ import os
 import pygame  # noqa: F401  (needed for the pygbag/web dependency scanner)
 
 from engine.app import Application, AppConfig
+from engine.platform_bridge import LandscapeLogicalSize
 from game.scenes.services import GameContext
 from game.scenes.cinematic_scene import CinematicScene
 from game.persistence.save_manager import SaveManager
@@ -44,6 +45,16 @@ def _WarmMusic(app: Application) -> None:
 
 async def Main() -> None:
     _EnsureAssets()
+
+    # On the web, widen the logical resolution to the device's landscape aspect
+    # (keeping the 540 reference height) so the framebuffer matches the screen
+    # and fills it without letterbox or distortion. Scenes read these values
+    # live off `theme`, so every layout reflows to the new width. No-op on
+    # desktop, where the tuned 960x540 is kept.
+    theme.SCREEN_WIDTH, theme.SCREEN_HEIGHT = LandscapeLogicalSize(
+        theme.SCREEN_WIDTH, theme.SCREEN_HEIGHT
+    )
+
     config = AppConfig("Cabo Verde — Mundial 2026", theme.SCREEN_WIDTH, theme.SCREEN_HEIGHT, ASSET_ROOT, 60)
     app = Application(config)
     _WarmMusic(app)

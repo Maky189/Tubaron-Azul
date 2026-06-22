@@ -5,6 +5,14 @@ WebAssembly. Keyboard works on desktop; on touchscreens an on-screen control pad
 appears automatically (it stays hidden until the first touch, so desktop players
 never see it).
 
+On phones the game is **landscape-only**: a "rotate your device" prompt covers
+the page in portrait, the first touch enters fullscreen and locks orientation,
+and the internal resolution is widened at startup to the device's landscape
+aspect ratio (keeping a 540px reference height) so the canvas fills the screen
+with no letterbox and no distortion. This lives in `engine/platform_bridge.py`
+(resolution) and `tools/patch_web.py` (page shell + orientation), and is inert
+on desktop.
+
 ## Build locally
 
 ```sh
@@ -19,7 +27,11 @@ python -m pygbag --width 960 --height 540 main.py
 # Or produce static files only (no server) into build/web/
 python -m pygbag --build --width 960 --height 540 \
     --app_name TubaraoAzul --title "Cabo Verde - Mundial 2026" main.py
+python tools/patch_web.py build/web/index.html   # mobile fit + landscape lock
 ```
+
+> The `--width/--height` here only seed pygbag's template; the running game
+> overrides the resolution per device (see the landscape note above).
 
 `build/web/` then contains `index.html`, the `.apk` data bundle, and a favicon.
 
@@ -45,6 +57,7 @@ In the Cloudflare Pages dashboard, connect the GitHub repo and set:
   pip install -r requirements-dev.txt && \
   python -m pygbag --build --width 960 --height 540 \
       --app_name TubaraoAzul --title "Cabo Verde - Mundial 2026" main.py && \
+  python tools/patch_web.py build/web/index.html && \
   cp _headers build/web/_headers
   ```
 - **Build output directory:** `build/web`
@@ -54,8 +67,12 @@ In the Cloudflare Pages dashboard, connect the GitHub repo and set:
 
 After the first deploy, confirm in DevTools → Network → the document response
 that both `Cross-Origin-Opener-Policy: same-origin` and
-`Cross-Origin-Embedder-Policy: require-corp` are present. If the canvas stays
-black, a missing header is the usual cause.
+`Cross-Origin-Embedder-Policy: credentialless` are present. `credentialless` (not
+`require-corp`) is required: pygbag pulls the CPython interpreter and pygame from
+the cross-origin `pygame-web.github.io` CDN, which sends no `Cross-Origin-
+Resource-Policy` header, so `require-corp` blocks those loads and the game hangs
+on "Loading, please wait". If the canvas stays black, a missing or wrong header
+is the usual cause.
 
 ### Audio note
 Browsers block audio until the player interacts with the page. pygbag shows a
