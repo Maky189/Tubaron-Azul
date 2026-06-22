@@ -31,12 +31,19 @@ HEAD_BLOCK = f"""{START}
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
   }}
-  /* The framebuffer aspect is computed (in Python) to match the device's
-     landscape aspect, so pygbag's own aspect-preserving canvas sizing already
-     fills the screen with no distortion. We only dark-fill the shell so any
-     sliver of letterbox (e.g. an unhidden address bar) is invisible -- we do
-     NOT force the canvas dimensions, which would fight pygbag and distort. */
+  /* Fill the whole viewport. The framebuffer aspect is computed (in Python) to
+     match the device's landscape aspect, so this scales close to uniformly; we
+     force it to fill (rather than let pygbag aspect-fit and centre) so there are
+     never side/letterbox bars when the real landscape viewport -- minus the
+     address bar -- is a touch wider than the framebuffer. The JS below re-asserts
+     this over pygbag's own inline sizing. */
   canvas#canvas, canvas.emscripten, canvas#canvas3d {{
+    position: absolute !important;
+    left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important;
+    width: 100vw !important; height: 100vh !important;
+    height: 100dvh !important;
+    max-width: none !important; max-height: none !important;
+    margin: 0 !important; transform: none !important;
     background: #001026 !important;
     -webkit-tap-highlight-color: transparent;
   }}
@@ -85,6 +92,28 @@ BODY_BLOCK = f"""{START}
   applyOrient();
   window.addEventListener('resize', applyOrient, {{ passive: true }});
   window.addEventListener('orientationchange', applyOrient, {{ passive: true }});
+
+  // pygbag sizes the canvas with inline styles (aspect-fit + centre), which
+  // leaves side bars. Re-assert a full-viewport fill on top of it. The guard
+  // (skip when already filled) stops the MutationObserver from looping on its
+  // own writes; pygbag only re-sizes on real resize events, so this is cheap.
+  function fitCanvas() {{
+    var c = document.getElementById('canvas');
+    if (!c) return;
+    if (c.style.getPropertyValue('width') === '100vw') return;
+    c.style.setProperty('width', '100vw', 'important');
+    c.style.setProperty('height', '100dvh', 'important');
+    c.style.setProperty('left', '0', 'important');
+    c.style.setProperty('top', '0', 'important');
+    c.style.setProperty('transform', 'none', 'important');
+  }}
+  fitCanvas();
+  window.addEventListener('resize', fitCanvas, {{ passive: true }});
+  window.addEventListener('orientationchange', fitCanvas, {{ passive: true }});
+  var canvas = document.getElementById('canvas');
+  if (canvas && window.MutationObserver) {{
+    new MutationObserver(fitCanvas).observe(canvas, {{ attributes: true, attributeFilter: ['style'] }});
+  }}
 }})();
 </script>
 {END}"""
