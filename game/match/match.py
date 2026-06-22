@@ -37,6 +37,7 @@ GRAVITY = 900.0
 
 KICKOFF_DELAY = 1.1
 GOAL_CELEBRATION = 3.0
+KEEPER_DIVE_DURATION = 0.45
 DEFAULT_DURATION = 150.0
 
 STATE_KICKOFF = "kickoff"
@@ -106,12 +107,17 @@ class Match:
             player.ball_cooldown = 0.0
             player.kick_timer = 0.0
             player.lunge_timer = 0.0
+            player.keeper_beaten_timer = 0.0
+            if player.is_keeper:
+                player.facing = self._KeeperFieldFacing(player.team_index)
 
         self.ball.pos = pitch.CENTER
         self.ball.vel = Vec2(0.0, 0.0)
         self.ball.owner = None
         self.ball.height = 0.0
         self.ball.height_vel = 0.0
+        self.ball.shot_immunity = 0.0
+        self.ball.pending_shot = False
 
     # -- queries used by the AI -----------------------------------------
 
@@ -132,6 +138,9 @@ class Match:
             return -1
 
         return self.ball.owner.team_index
+
+    def CanShootAtGoal(self, player: Player) -> bool:
+        return pitch.CanShootAtGoal(player.team_index, player.pos)
 
     def ClosestTeammateToBall(self, team_index: int) -> Player | None:
         best = None
@@ -180,9 +189,10 @@ class Match:
         self._IntegratePlayers(dt)
         self._ResolvePlayerCollisions()
         self._TeleportSuperKeeper()
-        self._UpdateOwnership()
+        self.ball.shot_immunity = max(0.0, self.ball.shot_immunity - dt)
         self._ResolveKicks(human)
         self._UpdateBall(dt)
+        self._UpdateOwnership()
         self._CheckGoal()
 
     def _UpdateClock(self, dt: float) -> None:
@@ -224,6 +234,7 @@ class Match:
     def _DecideAndSteer(self, dt: float, human: MatchInput) -> None:
         for player in self.players:
             player.kick_timer = max(0.0, player.kick_timer - dt)
+            player.keeper_beaten_timer = max(0.0, player.keeper_beaten_timer - dt)
             player.ball_cooldown = max(0.0, player.ball_cooldown - dt)
             player.lunge_timer = max(0.0, player.lunge_timer - dt)
             player.teleport_flash = max(0.0, player.teleport_flash - dt)
@@ -269,19 +280,59 @@ class Match:
 
         player.vel = player.vel + diff
 
+    def _KeeperFieldFacing(self, team_index: int) -> float:
+        return 1.0 if team_index == 0 else -1.0
+
+    def _UpdateKeeperFacing(self, player: Player) -> None:
+        if not pitch.BallInKeeperHalf(player.team_index, self.ball.pos.x):
+            return
+
+        dx = self.ball.pos.x - player.pos.x
+        if dx > 10.0:
+            player.facing = 1.0
+        elif dx < -10.0:
+            player.facing = -1.0
+        else:
+            player.facing = self._KeeperFieldFacing(player.team_index)
+
     def _UpdateFacing(self, player: Player) -> None:
-        if player.vel.x > 18.0:
+        if player.is_keeper:
+            self._UpdateKeeperFacing(player)
+        elif player.vel.x > 18.0:
             player.facing = 1.0
         elif player.vel.x < -18.0:
             player.facing = -1.0
 
         if player.IsMoving():
             player.run_phase += 0.18
+        elif player.is_keeper and pitch.BallInKeeperHalf(player.team_index, self.ball.pos.x):
+            player.run_phase += 0.14
 
     def _IntegratePlayers(self, dt: float) -> None:
         for player in self.players:
             player.pos = player.pos + player.vel * dt
             self._ClampToField(player)
+            self._ClampAttackDepth(player)
+
+    def _ClampAttackDepth(self, player: Player) -> None:
+        if self.ball.owner is not player or player.is_keeper:
+            return
+
+        small_left, _, small_right, _ = pitch.AttackingSmallBox(player.team_index)
+        margin = PLAYER_RADIUS + 6.0
+
+        if player.team_index == 0:
+            max_x = small_left - margin
+            if player.pos.x > max_x:
+                player.pos = Vec2(max_x, player.pos.y)
+                if player.vel.x > 0.0:
+                    player.vel = Vec2(0.0, player.vel.y)
+        else:
+            min_x = small_right + margin
+            if player.pos.x < min_x:
+                player.pos = Vec2(min_x, player.pos.y)
+                if player.vel.x < 0.0:
+                    player.vel = Vec2(0.0, player.vel.y)
 
     def _ClampToField(self, player: Player) -> None:
         x = min(max(player.pos.x, PLAYER_RADIUS), pitch.WIDTH - PLAYER_RADIUS)
@@ -344,9 +395,12 @@ class Match:
             keeper.vel = Vec2(0.0, 0.0)
             keeper.kick_timer = max(keeper.kick_timer, 0.25)
             keeper.teleport_flash = 0.3
-            keeper.facing = -1.0
+            keeper.facing = self._KeeperFieldFacing(keeper.team_index)
 
     def _UpdateOwnership(self) -> None:
+        if self.ball.shot_immunity > 0.0:
+            return
+
         if self.ball.height > 48.0:
             return
 
@@ -382,6 +436,7 @@ class Match:
 
             self.ball.owner = best
             self.ball.last_touch_team = best.team_index
+            self.ball.pending_shot = False
 
     def _ResolveKicks(self, human: MatchInput) -> None:
         owner = self.ball.owner
@@ -408,10 +463,10 @@ class Match:
                 self._Clear(owner)
 
     def _Shoot(self, player: Player, human: MatchInput | None) -> None:
-        goal = pitch.AttackingGoalCenter(player.team_index)
+        goal_line_x = pitch.AttackingGoalLineX(player.team_index)
         aim_y = self._rng.uniform(pitch.GoalMouthTop() + 24, pitch.GoalMouthBottom() - 24)
-        target = Vec2(goal.x, aim_y)
-        direction = (target - player.pos).GetNormalized()
+        target = Vec2(goal_line_x, aim_y)
+        direction = (target - self.ball.pos).GetNormalized()
 
         if human is not None and human.move.GetLength() > 0.3:
             direction = (direction * 0.45 + human.move.GetNormalized() * 0.55).GetNormalized()
@@ -421,7 +476,7 @@ class Match:
             spread = 0.05
 
         direction = self._ApplySpread(direction, spread)
-        self._ReleaseBall(player, direction, SHOOT_SPEED, loft=150.0)
+        self._ReleaseBall(player, direction, SHOOT_SPEED, loft=150.0, shot=True)
 
     def _Pass(self, player: Player) -> None:
         mate = self._BestPassTarget(player)
@@ -480,8 +535,21 @@ class Match:
         y = direction.x * sin_a + direction.y * cos_a
         return Vec2(x, y)
 
-    def _ReleaseBall(self, player: Player, direction: Vec2, speed: float, loft: float) -> None:
+    def _ReleaseBall(self, player: Player, direction: Vec2, speed: float, loft: float = 0.0, shot: bool = False) -> None:
         self.ball.owner = None
+        if shot:
+            self.ball.pos = self.ball.pos + direction * 48.0
+            self.ball.shot_immunity = 0.32
+            self.ball.pending_shot = True
+            for keeper in self.players:
+                if keeper.is_keeper and keeper.team_index != player.team_index:
+                    keeper.kick_timer = KEEPER_DIVE_DURATION
+                    if player.pos.x > keeper.pos.x + 8.0:
+                        keeper.facing = 1.0
+                    elif player.pos.x < keeper.pos.x - 8.0:
+                        keeper.facing = -1.0
+        else:
+            self.ball.pending_shot = False
         self.ball.vel = direction * speed
         self.ball.last_touch_team = player.team_index
         self.ball.height_vel = loft
@@ -565,11 +633,19 @@ class Match:
             self._RegisterGoal(0)
 
     def _RegisterGoal(self, team_index: int) -> None:
+        conceding = 1 - team_index
+
+        if self.ball.pending_shot:
+            for player in self.players:
+                if player.is_keeper and player.team_index == conceding:
+                    player.keeper_beaten_timer = GOAL_CELEBRATION
+                    player.kick_timer = 0.0
+
+        self.ball.pending_shot = False
         self.score[team_index] += 1
         self.last_scorer = team_index
         self.state = STATE_GOAL
         self.state_timer = GOAL_CELEBRATION
-        conceding = 1 - team_index
         self.kickoff_team = conceding
 
         if team_index == 0:
