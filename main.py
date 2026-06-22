@@ -1,6 +1,14 @@
 from __future__ import annotations
 import asyncio
 import os
+
+# pygbag scans only this entry module's imports to decide which WebAssembly
+# packages to load. pygame is used throughout engine/ but imported there only
+# transitively, so without this top-level import pygbag never loads the pygame
+# runtime and `import pygame` inside the engine yields an empty module on the
+# web build. The desktop build ignores the otherwise-unused import.
+import pygame  # noqa: F401  (needed for the pygbag/web dependency scanner)
+
 from engine.app import Application, AppConfig
 from game.scenes.services import GameContext
 from game.scenes.cinematic_scene import CinematicScene

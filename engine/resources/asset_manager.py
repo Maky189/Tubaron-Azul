@@ -57,7 +57,8 @@ class AssetManager:
         if relative in self._sounds:
             return self._sounds[relative]
 
-        if not pygame.mixer.get_init():
+        mixer = getattr(pygame, "mixer", None)
+        if mixer is None or not mixer.get_init():
             return None
 
         path = self.ResolvePath(relative)

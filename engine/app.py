@@ -70,9 +70,18 @@ class Application:
         # and there are no latency-sensitive effects.
         #
         # 48000 Hz matches the output device so nothing resamples on the way out.
+        # pygame.mixer is not always present at this point: the pygbag/web build
+        # does not expose it (nor even pygame.error) before pygame.init(), so the
+        # original `except pygame.error` raised its own AttributeError and killed
+        # the app before the window was created. This tuning is a desktop/WSL
+        # audio fix, so skip it cleanly when pre_init is unavailable.
+        pre_init = getattr(getattr(pygame, "mixer", None), "pre_init", None)
+        if pre_init is None:
+            return
+
         try:
-            pygame.mixer.pre_init(frequency=48000, size=-16, channels=2, buffer=16384)
-        except pygame.error:
+            pre_init(frequency=48000, size=-16, channels=2, buffer=16384)
+        except Exception:
             pass
 
     def GetAssets(self) -> AssetManager:

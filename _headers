@@ -1,7 +1,15 @@
 # Cloudflare Pages response headers.
 # pygbag runs CPython in WebAssembly and needs SharedArrayBuffer, which the
-# browser only exposes to a cross-origin-isolated page. These two headers turn
-# that isolation on; without them the game fails to boot.
+# browser only exposes to a cross-origin-isolated page. These headers turn that
+# isolation on; without them the game fails to boot.
+#
+# COEP must be `credentialless`, not `require-corp`: pygbag pulls the CPython
+# interpreter and runtime from the cross-origin pygame-web.github.io CDN, which
+# serves them with `Access-Control-Allow-Origin: *` but no Cross-Origin-Resource-
+# Policy header. Under `require-corp` the browser blocks those loads
+# (ERR_BLOCKED_BY_RESPONSE...COEP) and the game hangs on "Loading, please wait".
+# `credentialless` still grants cross-origin isolation but lets public CDN
+# resources load without a CORP header.
 /*
   Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Embedder-Policy: credentialless
