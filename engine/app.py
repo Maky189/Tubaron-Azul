@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import os
 from dataclasses import dataclass
 import pygame
@@ -7,6 +8,7 @@ from engine.input.input_manager import InputManager
 from engine.audio.audio_manager import AudioManager
 from engine.scene.scene_stack import SceneStack
 from engine.scene.scene import Scene
+from engine.input.touch_overlay import TouchOverlay
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,7 @@ class Application:
         self._input = InputManager()
         self._audio = AudioManager(self._assets)
         self._scenes = SceneStack()
+        self._touch = TouchOverlay(config.width, config.height)
 
     def _InitMixer(self) -> None:
         # Must run before pygame.init(): that call brings the mixer up and opens
@@ -94,6 +97,14 @@ class Application:
         self._running = False
 
     def Run(self) -> None:
+        """Synchronous entry point for desktop and tests.
+
+        Wraps the async loop so native runs and the test suite call exactly as
+        before; on the web the pygbag entry awaits RunAsync directly.
+        """
+        asyncio.run(self.RunAsync())
+
+    async def RunAsync(self) -> None:
         self._running = True
         self._scenes.ApplyPending()
 
@@ -108,13 +119,24 @@ class Application:
             if self._scenes.IsEmpty():
                 self._running = False
 
+            # Hand control back to the browser's event loop so it can paint the
+            # canvas and pump input. Harmless on desktop (a zero-delay yield);
+            # required under Emscripten/pygbag, which has no background thread to
+            # drive the frame and would otherwise hang the page.
+            await asyncio.sleep(0)
+
         pygame.quit()
 
     def _PumpEvents(self) -> None:
         self._input.BeginFrame()
         active = self._scenes.GetActive()
 
+        if active is not None:
+            self._touch.SetScheme(active.TouchControls())
+
         for event in pygame.event.get():
+            self._UpdateTouchVisibility(event)
+            self._touch.HandleEvent(event)
             self._input.HandleEvent(event)
 
             if active is not None:
@@ -122,6 +144,16 @@ class Application:
 
         if self._input.IsQuitRequested():
             self._running = False
+
+    def _UpdateTouchVisibility(self, event: pygame.event.Event) -> None:
+        # Auto-detect the input method: first finger reveals the on-screen pad,
+        # a real key press hides it again. Synthetic keys posted by the overlay
+        # itself carry `synthetic` and must not count as the player reaching for
+        # a keyboard.
+        if event.type == pygame.FINGERDOWN:
+            self._touch.SetVisible(True)
+        elif event.type == pygame.KEYDOWN and not getattr(event, "synthetic", False):
+            self._touch.SetVisible(False)
 
     def _UpdateActive(self, dt: float) -> None:
         active = self._scenes.GetActive()
@@ -134,3 +166,5 @@ class Application:
 
         for scene in self._scenes.IterVisible():
             scene.Render(self._screen)
+
+        self._touch.Render(self._screen)

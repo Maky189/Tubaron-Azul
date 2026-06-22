@@ -58,6 +58,10 @@ class MatchScene(GameScene):
             from game.scenes.pause_scene import PauseScene
             self.app.GetScenes().RequestPush(PauseScene(self.ctx))
 
+    def TouchControls(self) -> str:
+        from engine.input.touch_overlay import SCHEME_GAMEPLAY
+        return SCHEME_GAMEPLAY
+
     def Update(self, dt: float) -> None:
         self._elapsed += dt
         self._flash = max(0.0, self._flash - dt)

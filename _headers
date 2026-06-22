@@ -1,0 +1,7 @@
+# Cloudflare Pages response headers.
+# pygbag runs CPython in WebAssembly and needs SharedArrayBuffer, which the
+# browser only exposes to a cross-origin-isolated page. These two headers turn
+# that isolation on; without them the game fails to boot.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp

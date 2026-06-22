@@ -4,3 +4,7 @@ __pycache__/
 saves/save.json
 saves/records.json
 saves/_*.json
+
+# pygbag web build artefacts
+build/
+build_log.txt

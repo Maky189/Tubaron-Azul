@@ -44,3 +44,13 @@ class Scene(abc.ABC):
     def IsOpaque(self) -> bool:
         """When False the scene below keeps drawing, used for overlay menus."""
         return True
+
+    def TouchControls(self) -> str:
+        """Which on-screen control scheme the touch overlay should show.
+
+        Defaults to the menu scheme (D-pad + confirm + back), which every
+        navigable screen uses. Scenes with their own controls (the live match)
+        override this. Imported lazily to keep the engine input layer optional.
+        """
+        from engine.input.touch_overlay import SCHEME_MENU
+        return SCHEME_MENU

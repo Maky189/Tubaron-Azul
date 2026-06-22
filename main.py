@@ -1,6 +1,6 @@
 from __future__ import annotations
+import asyncio
 import os
-import threading
 from engine.app import Application, AppConfig
 from game.scenes.services import GameContext
 from game.scenes.cinematic_scene import CinematicScene
@@ -34,17 +34,18 @@ def _WarmMusic(app: Application) -> None:
         app.GetAssets().LoadSound(track)
 
 
-def Main() -> None:
+async def Main() -> None:
     _EnsureAssets()
     config = AppConfig("Cabo Verde — Mundial 2026", theme.SCREEN_WIDTH, theme.SCREEN_HEIGHT, ASSET_ROOT, 60)
     app = Application(config)
-    threading.Thread(target=_WarmMusic, args=(app,), daemon=True).start()
+    _WarmMusic(app)
     save_manager = SaveManager(SAVE_PATH)
     records = RecordBook(RECORDS_PATH)
     context = GameContext(app, save_manager, records)
     app.StartWith(CinematicScene(context))
-    app.Run()
+    await app.RunAsync()
 
 
-if __name__ == "__main__":
-    Main()
+# pygbag detects this module-level call and drives Main() as the web entry
+# point; CPython runs it identically on the desktop.
+asyncio.run(Main())

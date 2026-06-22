@@ -1,0 +1,3 @@
+# Tooling for building the web (WebAssembly) version. Not needed to run the
+# desktop game -- that only needs requirements.txt.
+pygbag==0.9.3

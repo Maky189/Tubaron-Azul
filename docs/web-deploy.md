@@ -1,0 +1,68 @@
+# Web build & deployment (Cloudflare Pages)
+
+The game runs in the browser via **pygbag**, which compiles the Pygame code to
+WebAssembly. Keyboard works on desktop; on touchscreens an on-screen control pad
+appears automatically (it stays hidden until the first touch, so desktop players
+never see it).
+
+## Build locally
+
+```sh
+python -m venv .venv-build           # keep the venv OUTSIDE the repo if you can;
+                                     # if it lives in ./.venv it's excluded via pygbag.ini
+source .venv-build/Scripts/activate  # (Windows: .venv-build\Scripts\Activate.ps1)
+pip install -r requirements-dev.txt
+
+# Dev server with hot reload — open the printed http://localhost:8000
+python -m pygbag --width 960 --height 540 main.py
+
+# Or produce static files only (no server) into build/web/
+python -m pygbag --build --width 960 --height 540 \
+    --app_name TubaraoAzul --title "Cabo Verde - Mundial 2026" main.py
+```
+
+`build/web/` then contains `index.html`, the `.apk` data bundle, and a favicon.
+
+### What gets bundled
+`pygbag.ini` controls the bundle. It excludes the local `.venv`, `docs/`,
+`tests/`, and the three raw player photos at the repo root (`player.png`,
+`player_kick.png`, `vozinha.png`) — those are only inputs to
+`tools/process_players.py`, and their processed sprites are already committed
+under `assets/players/`. pygbag does **not** read `.gitignore`, so anything you
+want kept out of the web build must be listed in `pygbag.ini`.
+
+## Deploy to Cloudflare Pages
+
+pygbag needs the page to be **cross-origin isolated** (it uses
+`SharedArrayBuffer`). The repo's `_headers` file sets the two required headers;
+it must land in the published directory next to `index.html`.
+
+In the Cloudflare Pages dashboard, connect the GitHub repo and set:
+
+- **Framework preset:** None
+- **Build command:**
+  ```sh
+  pip install -r requirements-dev.txt && \
+  python -m pygbag --build --width 960 --height 540 \
+      --app_name TubaraoAzul --title "Cabo Verde - Mundial 2026" main.py && \
+  cp _headers build/web/_headers
+  ```
+- **Build output directory:** `build/web`
+- **Environment variable:** `PYTHON_VERSION = 3.12` (Cloudflare's default Python
+  is fine for running pygbag, which only packages files; the game itself runs as
+  WebAssembly in the visitor's browser).
+
+After the first deploy, confirm in DevTools → Network → the document response
+that both `Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp` are present. If the canvas stays
+black, a missing header is the usual cause.
+
+### Audio note
+Browsers block audio until the player interacts with the page. pygbag shows a
+"click to start" gate (`--ume_block`, on by default) which doubles as the audio
+unlock, so music begins on first interaction — no code change needed.
+
+## Saves
+In-browser saves currently live in the WebAssembly in-memory filesystem: a run
+persists while the tab is open but resets on reload. Making saves survive a
+reload (IndexedDB-backed storage with `syncfs()`) is a self-contained follow-up.
