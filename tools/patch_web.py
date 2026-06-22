@@ -73,6 +73,11 @@ BODY_BLOCK = f"""{START}
 </div>
 <script>
 (function () {{
+  // Reflect the current orientation onto <body data-orient> so the portrait
+  // "rotate your device" overlay (CSS above) shows/hides. We do NOT request
+  // fullscreen or screen.orientation.lock(): mobile browsers reject those
+  // without strict conditions and the rejection is noisy, so the game simply
+  // runs in the normal page and asks the player to turn the phone.
   function applyOrient() {{
     var portrait = window.innerHeight > window.innerWidth;
     document.body.setAttribute('data-orient', portrait ? 'portrait' : 'landscape');
@@ -80,24 +85,6 @@ BODY_BLOCK = f"""{START}
   applyOrient();
   window.addEventListener('resize', applyOrient, {{ passive: true }});
   window.addEventListener('orientationchange', applyOrient, {{ passive: true }});
-
-  var coarse = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
-  function goImmersive() {{
-    if (!coarse) return;
-    var el = document.documentElement;
-    var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-    try {{ if (req) req.call(el); }} catch (e) {{}}
-    try {{
-      if (screen.orientation && screen.orientation.lock) {{
-        var r = screen.orientation.lock('landscape');
-        if (r && r.catch) r.catch(function () {{}});
-      }}
-    }} catch (e) {{}}
-    setTimeout(applyOrient, 300);
-  }}
-  // The first real touch both unlocks audio (pygbag) and takes us fullscreen.
-  window.addEventListener('pointerdown', goImmersive, {{ once: true, passive: true }});
-  window.addEventListener('touchend', goImmersive, {{ once: true, passive: true }});
 }})();
 </script>
 {END}"""
