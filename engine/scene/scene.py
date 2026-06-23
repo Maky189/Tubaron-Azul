@@ -8,15 +8,6 @@ if TYPE_CHECKING:
 
 
 class Scene(abc.ABC):
-    """A self-contained screen of the game: a menu, exploration, a battle.
-
-    This is the engine's abstract base class. It cannot be instantiated on its
-    own: every concrete screen subclasses it and must at least supply its own
-    `Render`. The lifecycle hooks below have harmless defaults so a subclass only
-    overrides the moments it actually cares about. Scenes never create each other
-    directly — they ask the application to push, pop or replace, which keeps the
-    transition policy in one place.
-    """
 
     def __init__(self, app: Application) -> None:
         self.app = app
@@ -46,11 +37,5 @@ class Scene(abc.ABC):
         return True
 
     def TouchControls(self) -> str:
-        """Which on-screen control scheme the touch overlay should show.
-
-        Defaults to the menu scheme (D-pad + confirm + back), which every
-        navigable screen uses. Scenes with their own controls (the live match)
-        override this. Imported lazily to keep the engine input layer optional.
-        """
         from engine.input.touch_overlay import SCHEME_MENU
         return SCHEME_MENU

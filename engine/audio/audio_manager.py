@@ -9,9 +9,6 @@ class AudioManager:
 
     def __init__(self, assets: AssetManager) -> None:
         self._assets = assets
-        # pygame.mixer may be absent on the pygbag/web build; treat a missing or
-        # uninitialised mixer as "audio disabled" so the game still runs silently
-        # instead of crashing. Every method below already guards on _enabled.
         mixer = getattr(pygame, "mixer", None)
         try:
             self._enabled = mixer is not None and mixer.get_init() is not None

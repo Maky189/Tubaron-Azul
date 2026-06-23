@@ -3,41 +3,17 @@ from dataclasses import dataclass, field
 import pygame
 from engine.mathx.vec2 import Vec2
 
-"""On-screen touch controls for the web build.
-
-The whole game already routes input through two channels: most scenes read
-KEYDOWN/KEYUP from `HandleEvent`, while the live match polls `InputManager`.
-Both are fed from the single event loop in `Application._PumpEvents`. So rather
-than teach every scene about touch, an on-screen button simply *posts the same
-pygame key events* a keyboard would. A finger press posts KEYDOWN, a lift posts
-KEYUP, and from there nothing downstream can tell touch from a real key.
-
-Movement during a match is the exception: the gameplay scheme shows a floating
-**analog stick** instead of a D-pad, and exposes a continuous direction vector
-through `GetMoveVector()` that `MatchScene` reads directly. Menus, which only
-need discrete up/down/left/right, keep the digital D-pad and the key-posting
-path. The overlay stays hidden until the first touch arrives (see Application),
-so desktop browsers never show it.
-"""
-
 SCHEME_MENU = "menu"
 SCHEME_GAMEPLAY = "gameplay"
 
 _MOUSE_FINGER = "mouse"
 
-# Analog stick geometry (reference height is 540; width flexes per device).
-_STICK_BASE_R = 80     # outer ring radius
-_STICK_KNOB_R = 42     # inner knob radius
-_STICK_TRAVEL = 72     # max knob travel from the ring centre
+_STICK_BASE_R = 80    
+_STICK_KNOB_R = 42    
+_STICK_TRAVEL = 72    
 
 
 def _IsTouchMouse(event: pygame.event.Event) -> bool:
-    """True when a mouse event is just SDL's touch-to-mouse emulation.
-
-    Touch devices emit both FINGER* and a mirrored MOUSE* event for the same
-    contact; we handle the FINGER one and drop the emulated mouse twin so a
-    single tap isn't counted twice.
-    """
     return bool(getattr(event, "touch", False))
 
 
@@ -46,9 +22,8 @@ class TouchButton:
     keys: tuple[int, ...]
     label: str
     rect: pygame.Rect
-    arrow: str | None = None  # "up"/"down"/"left"/"right" for the D-pad, else None
-    radius: int = 0           # >0 draws a circle, else a rounded rectangle
-
+    arrow: str | None = None  
+    radius: int = 0           
 
 @dataclass
 class _Layout:
@@ -70,8 +45,7 @@ def _DPad(cx: int, cy: int, unit: int) -> list[TouchButton]:
 def _BuildLayouts(width: int, height: int) -> dict[str, _Layout]:
     pad_cx, pad_cy, unit = 120, int(height * 0.70), 72
 
-    # Gameplay: analog stick on the left (handled separately), actions on the
-    # right. No D-pad buttons -- movement comes from GetMoveVector().
+   
     gameplay = [
         _Circle(width - 120, int(height * 0.70), 46, (pygame.K_SPACE,), "CHUTE"),
         _Circle(width - 220, int(height * 0.80), 38, (pygame.K_z,), "PASSE"),
@@ -104,17 +78,13 @@ class TouchOverlay:
         self._layouts = _BuildLayouts(width, height)
         self._scheme = SCHEME_MENU
         self._font: pygame.font.Font | None = None
-        # Which button each active finger is currently resting on.
         self._finger_button: dict[object, TouchButton] = {}
         self._visible = False
 
-        # Floating analog stick (gameplay only).
         self._stick_home = (int(width * 0.13), int(height * 0.66))
         self._stick_finger: object | None = None
         self._stick_anchor: tuple[int, int] = self._stick_home
-        self._stick_offset = Vec2(0.0, 0.0)  # pixels, clamped to _STICK_TRAVEL
-        # Reused scratch surface for the stick, sized to its largest extent, so
-        # drawing it never allocates a fresh (full-screen) surface each frame.
+        self._stick_offset = Vec2(0.0, 0.0)  
         self._stick_pad = _STICK_BASE_R + _STICK_TRAVEL + _STICK_KNOB_R + 4
         self._stick_scratch = pygame.Surface((self._stick_pad * 2, self._stick_pad * 2), pygame.SRCALPHA)
 
@@ -129,23 +99,15 @@ class TouchOverlay:
     def SetScheme(self, scheme: str) -> None:
         if scheme == self._scheme:
             return
-        # Drop any held buttons from the old scheme so a key can't get stuck
-        # down across a scene change.
+        
         self._ReleaseAll()
         self._scheme = scheme
 
     def GetMoveVector(self) -> Vec2:
-        """Analog move direction from the stick, magnitude 0..1.
-
-        Zero unless the gameplay stick is being held; MatchScene prefers this
-        over the keyboard when it is non-zero. Screen axes (x right, y down)
-        already match the match's input convention.
-        """
         if not self._visible or self._scheme != SCHEME_GAMEPLAY:
             return Vec2(0.0, 0.0)
         return Vec2(self._stick_offset.x / _STICK_TRAVEL, self._stick_offset.y / _STICK_TRAVEL)
 
-    # -- input -----------------------------------------------------------
 
     def HandleEvent(self, event: pygame.event.Event) -> None:
         if not self._visible:
@@ -168,8 +130,6 @@ class TouchOverlay:
         return (int(event.x * self._width), int(event.y * self._height))
 
     def _InStickZone(self, point: tuple[int, int]) -> bool:
-        # Left ~45% of the screen grabs the stick; the action buttons live on
-        # the right, so the two never fight over the same finger.
         return self._HasStick() and point[0] < self._width * 0.45
 
     def _HasStick(self) -> bool:
@@ -197,7 +157,6 @@ class TouchOverlay:
         target = self._ButtonAt(point)
         if target is current:
             return
-        # Sliding off a button releases it; sliding onto a new one presses it.
         if current is not None:
             self._PostKeys(current, down=False)
             del self._finger_button[finger]
@@ -238,12 +197,7 @@ class TouchOverlay:
     def _PostKeys(self, button: TouchButton, *, down: bool) -> None:
         kind = pygame.KEYDOWN if down else pygame.KEYUP
         for key in button.keys:
-            # `synthetic` lets Application tell these apart from real keyboard
-            # input, so a touch-posted KEYDOWN doesn't get read as "the player
-            # switched to the keyboard" and hide the overlay.
             pygame.event.post(pygame.event.Event(kind, key=key, mod=0, unicode="", scancode=0, synthetic=True))
-
-    # -- rendering -------------------------------------------------------
 
     def Render(self, surface: pygame.Surface) -> None:
         if not self._visible:
@@ -277,8 +231,6 @@ class TouchOverlay:
         knob_fill = (255, 255, 255, 70 if not active else 120)
         knob_line = (255, 255, 255, 150 if not active else 210)
 
-        # Draw into the reused scratch surface in local coordinates (its centre
-        # is the stick centre), then blit it once at the stick position.
         pad = self._stick_pad
         local = (pad, pad)
         knob = (int(pad + self._stick_offset.x), int(pad + self._stick_offset.y))

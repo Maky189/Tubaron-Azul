@@ -3,12 +3,6 @@ from engine.scene.scene import Scene
 
 
 class SceneStack:
-    """A stack of scenes with deferred mutation.
-
-    Push, pop and replace are queued and applied once per frame so a scene can
-    request a transition from inside its own Update without corrupting the
-    iteration that is still running.
-    """
 
     def __init__(self) -> None:
         self._scenes: list[Scene] = []
@@ -43,8 +37,8 @@ class SceneStack:
 
     def _ApplyOne(self, action: str, scene: Scene | None) -> None:
         if action == "push":
-            self._scenes.append(scene)  # type: ignore[arg-type]
-            scene.OnEnter()  # type: ignore[union-attr]
+            self._scenes.append(scene) 
+            scene.OnEnter() 
             return
 
         if action == "pop":
@@ -58,23 +52,22 @@ class SceneStack:
 
         if action == "replace":
             self._PopTop()
-            self._scenes.append(scene)  # type: ignore[arg-type]
-            scene.OnEnter()  # type: ignore[union-attr]
+            self._scenes.append(scene) 
+            scene.OnEnter() 
             return
 
         if action == "clear":
             while self._scenes:
                 self._PopTop()
 
-            self._scenes.append(scene)  # type: ignore[arg-type]
-            scene.OnEnter()  # type: ignore[union-attr]
+            self._scenes.append(scene)  
+            scene.OnEnter()  
 
     def _PopTop(self) -> None:
         if self._scenes:
             self._scenes.pop().OnExit()
 
     def IterVisible(self) -> list[Scene]:
-        """Returns scenes from the lowest opaque one up, so overlays render correctly."""
         first_visible = 0
 
         for index in range(len(self._scenes) - 1, -1, -1):

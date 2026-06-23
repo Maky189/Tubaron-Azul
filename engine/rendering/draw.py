@@ -4,13 +4,6 @@ import pygame
 Color = tuple[int, int, int]
 ColorA = tuple[int, int, int, int]
 
-# Outlined text is the same handful of static strings drawn every frame, and an
-# outline of thickness t costs (2t+1)^2 glyph blits each time. Composing each
-# label onto its own little surface once and reusing it turns a frame's worth of
-# text into a few plain blits -- the menus were spending most of their frame
-# budget here, which kept the loop from ever sleeping and starved the audio
-# thread. The key includes everything that changes the pixels; fonts live in the
-# asset cache for the whole run, so id(font) is stable.
 _text_cache: dict[tuple, tuple[pygame.Surface, int, int]] = {}
 
 
@@ -88,10 +81,6 @@ def DrawBar(
     pygame.draw.rect(surface, fill, inner)
     pygame.draw.rect(surface, border, rect, 2)
 
-
-# A gradient is fixed once its size and endpoints are known, but it was being
-# rebuilt line by line every frame. Render each distinct gradient once and blit
-# the cached copy thereafter.
 _gradient_cache: dict[tuple, pygame.Surface] = {}
 
 
