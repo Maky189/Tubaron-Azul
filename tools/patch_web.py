@@ -69,6 +69,45 @@ HEAD_BLOCK = f"""{START}
   #rotate-lock .t1 {{ font-size: 22px; font-weight: bold; }}
   #rotate-lock .t2 {{ font-size: 15px; opacity: 0.7; margin-top: 6px; }}
   @keyframes rl-spin {{ 0%,60% {{ transform: rotate(0); }} 80%,100% {{ transform: rotate(-90deg); }} }}
+  /* Start gate: a real button the player taps, so requestFullscreen() runs
+     inside a genuine user gesture (the only way browsers allow it). Hidden once
+     the game has started. */
+  #fs-gate {{
+    position: fixed; inset: 0; z-index: 2147483000;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 38%, #06245e, #001026 72%);
+    font-family: Arial, Helvetica, sans-serif; color: #eaf1ff; text-align: center;
+  }}
+  body.started #fs-gate {{ display: none; }}
+  #fs-gate .fg-title {{ font-size: 24px; font-weight: bold; letter-spacing: .5px; margin-bottom: 26px; }}
+  #fs-btn {{
+    -webkit-appearance: none; appearance: none; border: 0; cursor: pointer;
+    background: #ffcd00; color: #06245e; font-weight: bold; font-family: inherit;
+    font-size: 22px; padding: 16px 46px; border-radius: 999px; box-shadow: 0 6px 0 #b88f00;
+  }}
+  #fs-btn:active {{ transform: translateY(3px); box-shadow: 0 3px 0 #b88f00; }}
+  #fs-gate .fg-sub {{ margin-top: 18px; font-size: 14px; opacity: .75; }}
+  /* Loading screen with progress bar, shown after JOGAR until the game boots so
+     the player never stares at a blank screen wondering if it is working. */
+  #loading {{
+    position: fixed; inset: 0; z-index: 2147482000; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 38%, #06245e, #001026 72%);
+    font-family: Arial, Helvetica, sans-serif; color: #eaf1ff;
+  }}
+  body.loading #loading {{ display: flex; }}
+  #loading .ld-title {{ font-size: 20px; font-weight: bold; margin-bottom: 22px; }}
+  #loading .ld-track {{
+    width: 62%; max-width: 360px; height: 12px; border-radius: 999px;
+    background: rgba(255,255,255,.15); overflow: hidden; position: relative;
+  }}
+  #loading .ld-fill {{
+    position: absolute; top: 0; left: 0; height: 100%; width: 35%;
+    border-radius: 999px; background: #ffcd00;
+  }}
+  #loading.indet .ld-fill {{ animation: ld-slide 1.1s ease-in-out infinite; }}
+  @keyframes ld-slide {{ 0% {{ left: -40%; width: 40%; }} 50% {{ width: 55%; }} 100% {{ left: 100%; width: 40%; }} }}
+  #loading .ld-status {{ margin-top: 16px; font-size: 13px; opacity: .7; min-height: 1em; }}
 </style>
 {END}"""
 
@@ -77,6 +116,18 @@ BODY_BLOCK = f"""{START}
   <div class="ico">&#128241;</div>
   <div class="t1">Rode o telemovel</div>
   <div class="t2">Please rotate your device to landscape</div>
+</div>
+<div id="fs-gate">
+  <div>
+    <div class="fg-title">Cabo Verde &mdash; Mundial 2026</div>
+    <button id="fs-btn">&#9654;&nbsp; JOGAR</button>
+    <div class="fg-sub">Toque para jogar em ecra inteiro</div>
+  </div>
+</div>
+<div id="loading">
+  <div class="ld-title">A carregar o jogo&hellip;</div>
+  <div class="ld-track"><div class="ld-fill"></div></div>
+  <div class="ld-status">A iniciar&hellip;</div>
 </div>
 <script>
 (function () {{
@@ -113,6 +164,77 @@ BODY_BLOCK = f"""{START}
   var canvas = document.getElementById('canvas');
   if (canvas && window.MutationObserver) {{
     new MutationObserver(fitCanvas).observe(canvas, {{ attributes: true, attributeFilter: ['style'] }});
+  }}
+
+  // --- Start gate / fullscreen ----------------------------------------------
+  var docEl = document.documentElement;
+  function fsRequest() {{ return docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen; }}
+  function fsElement() {{ return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement; }}
+  var fsSupported = !!fsRequest();
+
+  // --- Loading screen --------------------------------------------------------
+  var loadingEl = document.getElementById('loading');
+  var loadTimer = null;
+  function bootedCanvas() {{
+    var c = document.getElementById('canvas');
+    return c && c.width > 1;
+  }}
+  function showLoading() {{
+    if (!loadingEl) return;
+    document.body.classList.add('loading');
+    loadingEl.classList.add('indet');
+    if (loadTimer) return;
+    loadTimer = setInterval(function () {{
+      if (bootedCanvas()) {{           // game is up -> drop the loader
+        document.body.classList.remove('loading');
+        clearInterval(loadTimer); loadTimer = null; fitCanvas(); return;
+      }}
+      // Mirror pygbag's own status text so the player sees real stages.
+      var ib = document.getElementById('infobox');
+      var st = loadingEl.querySelector('.ld-status');
+      if (ib && st) {{ var t = (ib.innerText || '').trim(); if (t) st.textContent = t; }}
+      // If pygbag exposes a real download figure, switch to a determinate bar.
+      var pr = document.getElementById('progress');
+      var fill = loadingEl.querySelector('.ld-fill');
+      if (pr && fill && pr.value > 0 && pr.value < pr.max) {{
+        loadingEl.classList.remove('indet');
+        fill.style.width = (100 * pr.value / pr.max) + '%';
+      }}
+    }}, 200);
+  }}
+
+  var started = false;
+  function startGame() {{
+    if (started) return;
+    started = true;
+    // Must run synchronously inside this tap for the browser to allow it.
+    var req = fsRequest();
+    if (req) {{ try {{ var r = req.call(docEl); if (r && r.catch) r.catch(function () {{}}); }} catch (e) {{}} }}
+    try {{
+      if (screen.orientation && screen.orientation.lock) {{
+        var lr = screen.orientation.lock('landscape');
+        if (lr && lr.catch) lr.catch(function () {{}});
+      }}
+    }} catch (e) {{}}
+    document.body.classList.add('started');
+    if (!bootedCanvas()) showLoading();
+    fitCanvas();
+  }}
+
+  var btn = document.getElementById('fs-btn');
+  if (btn) btn.addEventListener('click', startGame);
+
+  // Enforce fullscreen-only ONLY where the browser actually supports it: if the
+  // player leaves fullscreen, bring the gate back. On platforms without the
+  // Fullscreen API (e.g. iPhone Safari) we skip this so the game is still
+  // playable instead of being soft-locked behind a button that can't work.
+  if (fsSupported) {{
+    document.addEventListener('fullscreenchange', function () {{
+      if (started && !fsElement()) {{ started = false; document.body.classList.remove('started'); }}
+    }});
+    document.addEventListener('webkitfullscreenchange', function () {{
+      if (started && !fsElement()) {{ started = false; document.body.classList.remove('started'); }}
+    }});
   }}
 }})();
 </script>

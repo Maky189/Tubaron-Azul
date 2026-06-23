@@ -96,6 +96,9 @@ class Application:
     def GetScenes(self) -> SceneStack:
         return self._scenes
 
+    def GetTouch(self) -> TouchOverlay:
+        return self._touch
+
     def GetScreenSize(self) -> tuple[int, int]:
         return (self._config.width, self._config.height)
 

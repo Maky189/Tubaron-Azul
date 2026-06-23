@@ -81,9 +81,18 @@ class MatchScene(GameScene):
         held = self.app.GetInput()
         dx = self._Axis(held, _MOVE_RIGHT) - self._Axis(held, _MOVE_LEFT)
         dy = self._Axis(held, _MOVE_DOWN) - self._Axis(held, _MOVE_UP)
+        move = Vec2(dx, dy)
+
+        # The on-screen analog stick (web/touch) gives a continuous 360 degree
+        # direction; prefer it over the digital keys whenever it is engaged so a
+        # finger steers smoothly instead of in eight steps. Keyboard is untouched.
+        stick = self.app.GetTouch().GetMoveVector()
+        if stick.GetLength() > 0.05:
+            move = stick
+
         sprint = held.IsHeld(pygame.K_LSHIFT) or held.IsHeld(pygame.K_RSHIFT)
         return MatchInput(
-            Vec2(dx, dy), sprint,
+            move, sprint,
             self._Pressed(held, _SHOOT),
             self._Pressed(held, _PASS),
             self._Pressed(held, _SWITCH),
