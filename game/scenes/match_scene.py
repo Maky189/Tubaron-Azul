@@ -43,6 +43,11 @@ class MatchScene(GameScene):
         self._pitch = pitch_render.BuildPitchSurface()
         ball_img = self.app.GetAssets().LoadImage("pitch/ball.png")
         self._ball_img = pygame.transform.smoothscale(ball_img, (22, 22))
+        # Shadows are identical every frame, so build them once instead of
+        # allocating a Surface and redrawing an ellipse per player per frame --
+        # that was ~23 allocations a frame, costly under the web's WASM runtime.
+        self._player_shadow = self._MakeShadow(38, 16, 90)
+        self._ball_shadow = self._MakeShadow(18, 9, 110)
         self._flash = 0.0
         self._elapsed = 0.0
         self._result_handled = False
@@ -218,17 +223,18 @@ class MatchScene(GameScene):
         pygame.draw.circle(ring, (*theme.CV_YELLOW, alpha), (radius + 2, radius + 2), max(1, radius - 8), 2)
         surface.blit(ring, (int(screen.x - radius - 2), int(screen.y - 30 - radius)))
 
+    def _MakeShadow(self, width: int, height: int, alpha: int) -> pygame.Surface:
+        shadow = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (0, 0, 0, alpha), shadow.get_rect())
+        return shadow
+
     def _DrawShadow(self, surface: pygame.Surface, cam: Vec2, world: Vec2) -> None:
         screen = self._camera.WorldToScreen(world)
-        shadow = pygame.Surface((38, 16), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (0, 0, 0, 90), shadow.get_rect())
-        surface.blit(shadow, (int(screen.x - 19), int(screen.y - 8)))
+        surface.blit(self._player_shadow, (int(screen.x - 19), int(screen.y - 8)))
 
     def _DrawBallShadow(self, surface: pygame.Surface, cam: Vec2) -> None:
         screen = self._camera.WorldToScreen(self.match.ball.pos)
-        shadow = pygame.Surface((18, 9), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow, (0, 0, 0, 110), shadow.get_rect())
-        surface.blit(shadow, (int(screen.x - 9), int(screen.y - 4)))
+        surface.blit(self._ball_shadow, (int(screen.x - 9), int(screen.y - 4)))
 
     def _DrawBall(self, surface: pygame.Surface, cam: Vec2) -> None:
         ball = self.match.ball

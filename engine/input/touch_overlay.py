@@ -113,6 +113,10 @@ class TouchOverlay:
         self._stick_finger: object | None = None
         self._stick_anchor: tuple[int, int] = self._stick_home
         self._stick_offset = Vec2(0.0, 0.0)  # pixels, clamped to _STICK_TRAVEL
+        # Reused scratch surface for the stick, sized to its largest extent, so
+        # drawing it never allocates a fresh (full-screen) surface each frame.
+        self._stick_pad = _STICK_BASE_R + _STICK_TRAVEL + _STICK_KNOB_R + 4
+        self._stick_scratch = pygame.Surface((self._stick_pad * 2, self._stick_pad * 2), pygame.SRCALPHA)
 
     def SetVisible(self, visible: bool) -> None:
         if self._visible and not visible:
@@ -267,19 +271,24 @@ class TouchOverlay:
     def _DrawStick(self, surface: pygame.Surface) -> None:
         active = self._stick_finger is not None
         center = self._stick_anchor if active else self._stick_home
-        knob = (int(center[0] + self._stick_offset.x), int(center[1] + self._stick_offset.y))
 
         ring_fill = (255, 255, 255, 30 if not active else 46)
         ring_line = (255, 255, 255, 110 if not active else 150)
         knob_fill = (255, 255, 255, 70 if not active else 120)
         knob_line = (255, 255, 255, 150 if not active else 210)
 
-        layer = pygame.Surface((self._width, self._height), pygame.SRCALPHA)
-        pygame.draw.circle(layer, ring_fill, center, _STICK_BASE_R)
-        pygame.draw.circle(layer, ring_line, center, _STICK_BASE_R, 3)
+        # Draw into the reused scratch surface in local coordinates (its centre
+        # is the stick centre), then blit it once at the stick position.
+        pad = self._stick_pad
+        local = (pad, pad)
+        knob = (int(pad + self._stick_offset.x), int(pad + self._stick_offset.y))
+        layer = self._stick_scratch
+        layer.fill((0, 0, 0, 0))
+        pygame.draw.circle(layer, ring_fill, local, _STICK_BASE_R)
+        pygame.draw.circle(layer, ring_line, local, _STICK_BASE_R, 3)
         pygame.draw.circle(layer, knob_fill, knob, _STICK_KNOB_R)
         pygame.draw.circle(layer, knob_line, knob, _STICK_KNOB_R, 3)
-        surface.blit(layer, (0, 0))
+        surface.blit(layer, (center[0] - pad, center[1] - pad))
 
     def _DrawButton(self, surface: pygame.Surface, button: TouchButton, *, fill: tuple[int, int, int, int]) -> None:
         outline = (255, 255, 255, 120)

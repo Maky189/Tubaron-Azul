@@ -203,19 +203,32 @@ BODY_BLOCK = f"""{START}
     }}, 200);
   }}
 
-  var started = false;
-  function startGame() {{
-    if (started) return;
-    started = true;
-    // Must run synchronously inside this tap for the browser to allow it.
-    var req = fsRequest();
-    if (req) {{ try {{ var r = req.call(docEl); if (r && r.catch) r.catch(function () {{}}); }} catch (e) {{}} }}
+  function lockLandscape() {{
+    // Only valid once a fullscreen element exists; pin the orientation so
+    // rotating the phone no longer flips the game.
     try {{
       if (screen.orientation && screen.orientation.lock) {{
         var lr = screen.orientation.lock('landscape');
         if (lr && lr.catch) lr.catch(function () {{}});
       }}
     }} catch (e) {{}}
+  }}
+
+  var started = false;
+  function startGame() {{
+    if (started) return;
+    started = true;
+    // Must run synchronously inside this tap for the browser to allow it. The
+    // orientation lock can only be applied once fullscreen is actually active,
+    // so do it when the request resolves / on fullscreenchange, not now.
+    var req = fsRequest();
+    if (req) {{
+      try {{
+        var r = req.call(docEl);
+        if (r && r.then) r.then(lockLandscape, function () {{}});
+        else lockLandscape();
+      }} catch (e) {{}}
+    }}
     document.body.classList.add('started');
     if (!bootedCanvas()) showLoading();
     fitCanvas();
@@ -229,12 +242,16 @@ BODY_BLOCK = f"""{START}
   // Fullscreen API (e.g. iPhone Safari) we skip this so the game is still
   // playable instead of being soft-locked behind a button that can't work.
   if (fsSupported) {{
-    document.addEventListener('fullscreenchange', function () {{
-      if (started && !fsElement()) {{ started = false; document.body.classList.remove('started'); }}
-    }});
-    document.addEventListener('webkitfullscreenchange', function () {{
-      if (started && !fsElement()) {{ started = false; document.body.classList.remove('started'); }}
-    }});
+    function onFsChange() {{
+      if (fsElement()) {{
+        lockLandscape();                  // entered fullscreen -> pin orientation
+      }} else if (started) {{
+        started = false;                  // left fullscreen -> show the gate again
+        document.body.classList.remove('started');
+      }}
+    }}
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
   }}
 }})();
 </script>
